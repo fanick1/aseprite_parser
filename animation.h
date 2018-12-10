@@ -15,7 +15,7 @@
 
 #include <array>
 #include <vector>
-#include "aseprite.h"
+
 namespace animation{
 
 enum class LoopType {
@@ -24,21 +24,11 @@ enum class LoopType {
 	PING_PONG
 };
 
-
-
 struct Color {
 	uint8_t r;
 	uint8_t g;
 	uint8_t b;
 	uint8_t a = 255;
-
-	Color & operator = (const aseprite::Color & src) {
-		r = src.r;
-		g = src.g;
-		b = src.b;
-		a = src.a;
-		return *this;
-	}
 };
 
 class Palette {
@@ -67,8 +57,8 @@ public:
 class Frame {
 public:
 	uint16_t duration;//ms
-	//Cel cel;
 };
+
 class Layer {
 public:
 	bool visible = true;
@@ -89,6 +79,7 @@ public:
 	Layer(Layer && l) = default;
 	Layer & operator = (const Layer & l) = default;
 };
+
 class Loop {
 public:
 	uint16_t from;
@@ -103,6 +94,7 @@ public:
 		name(name) {
 	}
 };
+
 class Animation {
 public:
 	uint16_t width;
@@ -121,7 +113,6 @@ public:
 		}
 	}
 };
-
 
 }
 #endif

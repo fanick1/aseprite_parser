@@ -36,7 +36,11 @@ animation::Animation fromASEPRITE(const aseprite::ASEPRITE & ase){
 		if(chunk.type == 0x2019) {
 			const auto & palette_chunk = std::get<aseprite::PALETTE_CHUNK>(chunk.data);
 			for(size_t i = 0; i < palette_chunk.colors.size(); i++){
-				animation.palette.colors[i] = palette_chunk.colors[i];
+				animation.palette.colors[i].r = palette_chunk.colors[i].r;
+				animation.palette.colors[i].g = palette_chunk.colors[i].g;
+				animation.palette.colors[i].b = palette_chunk.colors[i].b;
+				animation.palette.colors[i].a = palette_chunk.colors[i].a;
+
 			}
 
 		}
