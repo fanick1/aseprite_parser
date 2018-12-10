@@ -1,16 +1,15 @@
 /*
- * main.cpp
- *
- *  Created on: Sep 18, 2018
- *      Author: fanick
- *
- *      TODO: code formatting
+ * Aseprite binary loader
+ * Version 0.1
+ * Copyright 2018 by Frantisek Veverka
  *
  */
-// https://github.com/aseprite/aseprite/blob/af32df1a2aa1b243effc5509f766276164d57c05/docs/ase-file-specs.md
-//  aseprite/docs/ase-file-specs.md
+/**
+ * Based on documentation of the aseprite binary format
+ * https://github.com/aseprite/aseprite/blob/af32df1a2aa1b243effc5509f766276164d57c05/docs/ase-file-specs.md
+ *  aseprite/docs/ase-file-specs.md
+ */
 
-// aseprite format header
 #ifndef ASEPRITE_H
 #define ASEPRITE_H
 #include <cstdint>
@@ -23,6 +22,7 @@
 #include <variant>
 #include "tinf/tinf.h"
 
+namespace aseprite {
 using BYTE = uint8_t;
 using WORD = uint16_t;
 using SHORT = int16_t;
@@ -35,13 +35,13 @@ bool operator & (std::ifstream & stream, OUT & out){
     return stream.good();
 }
 
-template <typename OUT, size_t S>
-bool operator & (std::ifstream & stream, OUT (& out)[S]){
-    stream.read((char *) &out, sizeof(OUT) * S);
-        return stream.good();
-
-    return stream.good();
-}
+//template <typename OUT, size_t S>
+//bool operator & (std::ifstream & stream, OUT (& out)[S]){
+//    stream.read((char *) &out, sizeof(OUT) * S);
+//        return stream.good();
+//
+//    return stream.good();
+//}
 enum PIXELTYPE {
     RGBA, GRAYSCALE, INDEXED
 };
@@ -74,6 +74,9 @@ struct STRING {
             result = result && s & data[i];
         }
         return result;
+    }
+    std::string toString() const {
+        return std::string(reinterpret_cast<const char *>(&data[0]), data.size());
     }
 };
 
@@ -260,8 +263,15 @@ struct PALETTE_CHUNK {
 
 struct LAYER_CHUNK {
 
-	LAYER_CHUNK(LAYER_CHUNK && layer) noexcept{
-		//TODO
+	LAYER_CHUNK(LAYER_CHUNK && layer) noexcept {
+        flags = layer.flags;
+        layerType = layer.layerType;
+        layerChildLevel = layer.layerChildLevel;
+        width = layer.width;
+        height = layer.height;
+        blendMode = layer.blendMode;
+        opacity = layer.opacity;
+        name = std::move(layer.name);
 	}
     LAYER_CHUNK(std::ifstream & s){
         read(s);
@@ -277,9 +287,16 @@ struct LAYER_CHUNK {
         name = std::move(layer.name);
         return *this;
     }
-    WORD flags;
+    WORD flags; //
+                // 1 = Visible
+                // 2 = Editable
+                // 4 = Lock movement
+                // 8 = Background
+                // 16 = Prefer linked cels
+                // 32 = The layer group should be displayed collapsed
+                // 64 = The layer is a reference layer
     WORD layerType; //0 - normal, 1 - group layer
-    WORD layerChildLevel;
+    WORD layerChildLevel; // see NOTE.1
 
     WORD width; // default layer width in pixels . ignored
     WORD height; //ignored
@@ -339,10 +356,7 @@ struct TAG {
     WORD from;
     WORD to;
     BYTE direction; // 0 - forward, 1 - reverse, 2 - ping-pong
-//    BYTE unused[8];
-//    BYTE color[3]; // unused, color of the tag
-//    BYTE extra; //ignored, 0
-    STRING name; //name of the animatiom loop (e.g. walk, jump, etc.)
+    STRING name; //name of the animation loop (e.g. walk, jump, etc.)
     bool read(std::ifstream & s) {
         BYTE unused[8];
         BYTE color[3]; // unused, color of the tag
@@ -452,23 +466,42 @@ struct SLICE_CHUNK {
 
 struct CEL_CHUNK {
 
-	//TODO BIG TIME!!!
 	CEL_CHUNK & operator = (const CEL_CHUNK && cel){
+		layerIndex = cel.layerIndex;
+		x = cel.x;
+		y = cel.y;
+		opacity = cel.opacity;
+		type = cel.type;
+		pixels = std::move(cel.pixels);
+		width = cel.width;
+		height = cel.height;
+		frameLink = cel.frameLink;
+
 		return *this;
 	}
-	//TODO BIG TIME!!!
-	CEL_CHUNK(CEL_CHUNK && c){}
+
+	CEL_CHUNK(CEL_CHUNK && cel){
+		layerIndex = cel.layerIndex;
+		x = cel.x;
+		y = cel.y;
+		opacity = cel.opacity;
+		type = cel.type;
+		pixels = std::move(cel.pixels);
+		width = cel.width;
+		height = cel.height;
+		frameLink = cel.frameLink;
+	}
     CEL_CHUNK(std::ifstream & s, PIXELTYPE pixelFormat, DWORD dataSize){
         read(s, pixelFormat, dataSize);
     }
     ~CEL_CHUNK(){
         pixels.clear();
     }
-    WORD layerIndex;
+    WORD layerIndex; // see NOTE.2
     SHORT x;
     SHORT y;
     BYTE opacity;
-    WORD type;
+    WORD type; // 0 - raw cel, 1 - linked cel, 2 - compressed
     std::vector<PIXEL_DATA> pixels;
 
     WORD width = 0; //type == 0,2
@@ -649,7 +682,7 @@ struct FRAME {
 
         if(result){
             std::cout <<std::hex<< "DEBUG Frame: magicNumber: " << magicNumber << " chunks_old: " << chunks_old << std::dec << "\n";
-            //chunks.reserve(chunkCount);
+            chunks.reserve(chunkCount);
             for(size_t c = 0; c < chunkCount && result; c++){
                 DWORD size;
                 WORD type;
@@ -751,4 +784,5 @@ Layer name and hierarchy      Layer index
   `- Layer3                   5
 
  */
+}
 #endif
