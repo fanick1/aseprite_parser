@@ -1,7 +1,7 @@
 /*
  * Aseprite animation
  * Version 0.1
- * Copyright 2018 by Frantisek Veverka
+ * Copyright 2018, 2019 by Frantisek Veverka
  *
  */
 
@@ -103,11 +103,6 @@ public:
     uint16_t y = 0;
     uint8_t opacity = 0;
     uint32_t image; //pointer to animation.images
-
-    Cel() = default;
-    Cel(const Cel & c) = default;
-    Cel(Cel && c) = default;
-    Cel & operator =(const Cel & c) = default;
 };
 
 class Frame {
@@ -240,10 +235,6 @@ public:
         std::cout << "  layers: \n";
         for (const auto & layer : layers) {
             std::cout << " name: " << layer.name << " " << (layer.isGroupLayer ? "[G]" : "") << "\n";
-        }
-        std::cout << "  loops: \n";
-        for (const auto & loop : loops) {
-            std::cout << " name: " << loop.name << " " << " from: " << loop.from + 1 << " to: " << loop.to + 1<< "\n";
         }
     }
     static animation::Animation loadAseImage(const std::string &path);
