@@ -1,7 +1,7 @@
 /*
  * Aseprite animation
  * Version 0.1
- * Copyright 2019 by Frantisek Veverka
+ * Copyright 2019, 2021 by Frantisek Veverka
  *
  */
 #include <string>
@@ -12,7 +12,7 @@
 animation::Animation animation::Animation::loadAseImage(const std::string &path) {
     return fromASEPRITE(aseprite::ASEPRITE(path));
 }
-animation::LoopType loopTypeFromType(uint16_t type) {
+animation::LoopType from(uint16_t type) {
     switch (type) {
     case 0:
         return animation::LoopType::FORWARD;
@@ -38,32 +38,30 @@ animation::Animation fromASEPRITE(const aseprite::ASEPRITE & ase) {
     animation.framesCount = ase.header.frames;
     animation.transparentIndex = ase.header.transparentIndex;
     animation.frames.reserve(animation.framesCount);
-
+    animation.slices.reserve(ase.sliceCount);
     for (const auto & chunk : ase.frames[0].chunks) {
-        if (chunk.type == 0x2019) {
+        if (chunk.type == aseprite::CHUNK_TYPE::PALETTE_0x2019) {
             const auto & palette_chunk = std::get<aseprite::PALETTE_CHUNK>(chunk.data);
             for (size_t i = 0; i < palette_chunk.colors.size(); i++) {
                 animation.palette.colors[i].r = palette_chunk.colors[i].r;
                 animation.palette.colors[i].g = palette_chunk.colors[i].g;
                 animation.palette.colors[i].b = palette_chunk.colors[i].b;
                 animation.palette.colors[i].a = palette_chunk.colors[i].a;
-
             }
-
         }
-        if (chunk.type == 0x2018) {
+        if (chunk.type == aseprite::CHUNK_TYPE::FRAME_TAGS_0x2018) {
             const auto & tag_chunk = std::get<aseprite::TAG_CHUNK>(chunk.data);
             animation.loops.reserve(tag_chunk.tags.size());
             for (const auto & tag : tag_chunk.tags) {
                 animation.loops.emplace_back(
                     tag.from,
                     tag.to,
-                    loopTypeFromType(tag.direction),
+                    from(tag.direction),
                     tag.name.toString()
                     );
             }
         }
-        if (chunk.type == 0x2004) {
+        if (chunk.type == aseprite::CHUNK_TYPE::LAYER_0x2004) {
             const auto & layer = std::get<aseprite::LAYER_CHUNK>(chunk.data);
             animation.layers.emplace_back(
                 animation::Layer::BLEND_MODE(layer.blendMode),
@@ -74,10 +72,50 @@ animation::Animation fromASEPRITE(const aseprite::ASEPRITE & ase) {
                 animation.framesCount);
         }
     }
-    for (size_t f = 0; f < animation.framesCount; f++) {
+    for (uint32_t f = 0; f < animation.framesCount; f++) {
         animation.frames[f].duration = ase.frames[f].duration;
         for (const auto & chunk : ase.frames[f].chunks) {
-            if (chunk.type == 0x2005) {
+            if (chunk.type == aseprite::CHUNK_TYPE::SLICE_0x2022) {
+                const auto & slice_chunk = std::get<aseprite::SLICE_CHUNK>(chunk.data);
+                std::vector<animation::Slice::Key> sliceKeys;
+                sliceKeys.reserve(slice_chunk.sliceKeys.size());
+                for (const auto &key : slice_chunk.sliceKeys) {
+                    const bool has9Patch = slice_chunk.flags & 0x01;
+                    const bool hasPivot = slice_chunk.flags & 0x02;
+                    animation::Slice::NinePatch ninePatch;
+                    animation::Slice::Pivot pivot;
+
+                    if(has9Patch){
+                        ninePatch.x = key.ninePatches.centerX;
+                        ninePatch.y = key.ninePatches.centerY;
+                        ninePatch.width = key.ninePatches.centerWidth;
+                        ninePatch.height = key.ninePatches.centerHeight;
+                    }
+                    if(hasPivot){
+                        pivot.x = key.pivot.pivotX;
+                        pivot.y = key.pivot.pivotY;
+                    }
+                    sliceKeys.emplace_back(animation::Slice::Key{
+                        .frame = f,
+                        .x = key.x,
+                        .y = key.y,
+                        .width = key.width,
+                        .height = key.height,
+                        .ninePatch = ninePatch,
+                        .pivot = pivot
+                    });
+                }
+
+                auto &slice = animation.slices.emplace_back(
+                        animation::Slice{
+                                .name = slice_chunk.name.toString(),
+                                .sliceKeys = std::move(sliceKeys)
+                        }
+                );
+                animation.sliceLookup[slice.name] = animation.slices.size() - 1;
+            }
+
+            if (chunk.type == aseprite::CHUNK_TYPE::CEL_0x2005) {
                 const auto & cel_chunk = std::get<aseprite::CEL_CHUNK>(chunk.data);
                 auto & layer = animation.layers[cel_chunk.layerIndex]; //TODO bounds check
                 auto & cel = layer.frames[f];
@@ -100,6 +138,19 @@ animation::Animation fromASEPRITE(const aseprite::ASEPRITE & ase) {
                 }
             }
         }
+    }
+    if(animation.loops.empty() && animation.framesCount > 0){
+        std::vector<int32_t> animationLoop;
+        uint16_t loopLength = animation.framesCount;
+        animationLoop.reserve(loopLength * 2 + 2);
+        for (uint16_t frame = 0; frame < loopLength; frame++) {
+            animationLoop.push_back(frame);
+            animationLoop.push_back(animation.frames[frame].duration);
+        }
+        animationLoop.push_back(-1);
+        animationLoop.push_back(0);
+        animation.animations.push_back(animationLoop);
+        animation.animationLookup[""] = animation.animations.size() - 1;
     }
     for (const auto & loop : animation.loops) {
         std::vector<int32_t> animationLoop;

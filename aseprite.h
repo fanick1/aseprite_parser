@@ -1,7 +1,7 @@
 /*
  * Aseprite binary loader
  * Version 0.1
- * Copyright 2018, 2019 by Frantisek Veverka
+ * Copyright 2018, 2019, 2021 by Frantisek Veverka
  *
  */
 /**
@@ -15,7 +15,6 @@
 #include <cstdint>
 #include <vector>
 #include <string>
-#include <iostream>
 #include <fstream>
 #include <array>
 #include <memory>
@@ -235,18 +234,14 @@ struct SLICE_KEY {
         LONG pivotY;
     };
 
-    union t_data {
-        TYPE_NINE_PATCHES ninePatches;
-        TYPE_PIVOT pivot;
-    };
-
     DWORD frame;
     LONG x;
     LONG y;
     DWORD width;
     DWORD height;
 
-    t_data data;
+    TYPE_NINE_PATCHES ninePatches;
+    TYPE_PIVOT pivot;
 };
 
 struct SLICE_CHUNK {
@@ -303,6 +298,7 @@ struct CHUNK {
 
     CHUNK(CHUNK && c);
 };
+struct ASEPRITE;
 
 struct FRAME {
     DWORD size; // bytes
@@ -313,13 +309,13 @@ struct FRAME {
     DWORD chunkCount; // if zero, use chunks_old
     std::vector<CHUNK> chunks;
 
-    bool read(std::ifstream & s, PIXELTYPE pixelFormat);
+    bool read(std::ifstream & s, PIXELTYPE pixelFormat, ASEPRITE & aseprite);
 };
 
 struct ASEPRITE {
     ASE_HEADER header;
     std::vector<FRAME> frames;
-
+    size_t sliceCount = 0;
     ASEPRITE(std::string filename);
 private:
     static bool tinf_initialized;

@@ -1,7 +1,7 @@
     /*
  * Aseprite binary loader
  * Version 0.1
- * Copyright 2018, 2019 by Frantisek Veverka
+ * Copyright 2018, 2019, 2021 by Frantisek Veverka
  *
  */
 /**
@@ -302,7 +302,7 @@ bool SLICE_CHUNK::read(std::ifstream & s) {
             && s & k.width
             && s & k.height;
         if (flags & 0x1) {
-            auto & n = k.data.ninePatches;
+            auto & n = k.ninePatches;
             result = result
                 && s & n.centerX
                 && s & n.centerY
@@ -310,7 +310,7 @@ bool SLICE_CHUNK::read(std::ifstream & s) {
                 && s & n.centerHeight;
         }
         if (flags & 0x2) {
-            auto & pivot = k.data.pivot;
+            auto & pivot = k.pivot;
             result = result
                 && s & pivot.pivotX
                 && s & pivot.pivotY;
@@ -494,7 +494,7 @@ CHUNK::CHUNK(CHUNK && c) {
     c.type = 0;
 }
 
-bool FRAME::read(std::ifstream & s, PIXELTYPE pixelFormat) {
+bool FRAME::read(std::ifstream & s, PIXELTYPE pixelFormat, ASEPRITE & aseprite) {
     bool result = s & size
         && s & magicNumber
         && s & chunks_old
@@ -510,7 +510,11 @@ bool FRAME::read(std::ifstream & s, PIXELTYPE pixelFormat) {
             WORD type;
             constexpr size_t CHUNK_HEADER_SIZE = sizeof(size) + sizeof(type);
             auto p = s.tellg();
-            result = result && s & size && s & type;
+            result = result && (s & size) && (s & type);
+            if (!result) {
+                break;
+            }
+
             //auto p2 = s.tellg();
             //std::cout << std::hex << "0x" << p2 << ":DEBUG Chunk: size: " << size << " type: " << type << std::dec << "\n";
             switch (type) {
@@ -537,6 +541,7 @@ bool FRAME::read(std::ifstream & s, PIXELTYPE pixelFormat) {
             }
             case SLICE_0x2022: {
                 chunks.emplace_back(SLICE_CHUNK(s), type);
+                aseprite.sliceCount ++;
                 break;
             }
             default:
@@ -566,7 +571,7 @@ ASEPRITE::ASEPRITE(std::string filename) {
         frames.resize(header.frames);
         for (size_t f = 0; f < header.frames && file.good(); f++) {
             //std::cout << " FRAME " << f << "\n";
-            if(!frames[f].read(file, pixelFormat)){
+            if(!frames[f].read(file, pixelFormat, *this)){
                 std::cout << " Failed to read FRAME " << f << " in " << filename << " ...stopping.\n";
                 break;
             }

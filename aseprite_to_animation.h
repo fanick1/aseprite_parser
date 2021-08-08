@@ -1,7 +1,7 @@
 /*
  * Aseprite to animation transformation
  * Version 0.1
- * Copyright 2018, 2019 by Frantisek Veverka
+ * Copyright 2018, 2021 by Frantisek Veverka
  *
  */
 
@@ -10,7 +10,7 @@
 #include "aseprite.h"
 #include "animation.h"
 
-animation::LoopType loopTypeFromType(uint16_t type);
+animation::LoopType from(uint16_t type);
 
 std::vector<uint8_t> from(const std::vector<aseprite::PIXEL_DATA> & in);
 

@@ -1,7 +1,7 @@
 /*
  * Aseprite animation
  * Version 0.1
- * Copyright 2018, 2019 by Frantisek Veverka
+ * Copyright 2018, 2019, 2021 by Frantisek Veverka
  *
  */
 
@@ -9,9 +9,9 @@
 #define ANIMATION_H
 
 #include <cstdint>
+#include <cassert>
 
 #include <string>
-#include <iostream>
 #include <utility>
 
 #include <array>
@@ -99,8 +99,8 @@ public:
 
 class Cel {
 public:
-    uint16_t x = 0;
-    uint16_t y = 0;
+    int16_t x = 0;
+    int16_t y = 0;
     uint8_t opacity = 0;
     uint32_t image; //pointer to animation.images
 };
@@ -110,8 +110,45 @@ public:
     uint16_t duration; //ms
 };
 
+class Slice {
+public:
+    class NinePatch {
+    public:
+        int32_t x = 0;
+        int32_t y = 0;
+        uint32_t width = 0;
+        uint32_t height = 0;
+    };
+    class Pivot {
+    public:
+        int32_t x = 0;
+        int32_t y = 0;
+    };
+    class Key {
+    public:
+        uint32_t frame = 0;
+        int32_t x = 0;
+        int32_t y = 0;
+        uint32_t width = 0; // 0 means hidden for given frame
+        uint32_t height = 0;
+        NinePatch ninePatch;
+        Pivot pivot;
+    };
+    std::string name;
+    std::vector<Key> sliceKeys;
+};
+
+
 class Layer {
 public:
+    class LayerView {
+    public:
+        bool visible = true;
+
+        LayerView(const Layer & l) :
+            visible(l.visible) {
+        }
+    };
     enum BLEND_MODE {
         Normal = 0,
         Multiply = 1,
@@ -210,6 +247,49 @@ public:
 
 class Animation {
 public:
+
+    class AnimationView {
+    public:
+        const Animation & animation;
+        std::vector<Layer::LayerView> layerViews;
+    public:
+        AnimationView(const Animation & animation) :
+            animation(animation),
+            layerViews(animation.layers.begin(), animation.layers.end()) {
+        }
+
+        int getLayerId(const std::string & name) {
+            for (uint32_t i = 0; i < layerViews.size(); i++) {
+                if (animation.layers[i].name == name) {
+                    return i;
+                }
+            }
+            return -1;
+        }
+
+        void setLayerVisibility(const std::string & name, bool visible) {
+            int index = getLayerId(name);
+            if(index != -1){
+                layerViews[index].visible = visible;
+            }
+        }
+
+        void setVisibilityForAllLayers(bool visible) {
+            for (auto & view : layerViews) {
+                view.visible = visible;
+            }
+        }
+
+        void hideAllLayers() {
+            setVisibilityForAllLayers(false);
+        }
+
+        void showAllLayers() {
+            setVisibilityForAllLayers(true);
+        }
+
+    };
+
     uint16_t width;
     uint16_t height;
     uint16_t framesCount;
@@ -220,23 +300,49 @@ public:
     std::vector<Layer> layers;
     std::vector<Image> images;
     std::vector<Loop> loops;
-    std::map<std::string, uint32_t> animationLookup; //index to animations
+    std::vector<Slice> slices;
+    std::map<std::string, size_t> animationLookup; //index to animations
+    std::map<std::string, size_t> sliceLookup; //index to slices
 
-    void setLayerVisibility(const std::string & name, bool visible) {
-        for (auto & layer : layers) {
-            if (layer.name == name) {
-                layer.visible = visible;
-                return;
-            }
+
+    bool hasAnimation(const std::string & animationName) {
+        return animationLookup.count(animationName) > 0;
+    }
+
+    const std::vector<int32_t> & getAnimation(const std::string & animationName) const {
+        const auto & it = animationLookup.find(animationName);
+        if(it == animationLookup.end()){
+            assert(animations.size() > 0);
+            return animations[0];
+        } else {
+            return animations[it->second];
         }
     }
     void log() {
-        std::cout << "Animation: frames:" << framesCount << " width: " << width << " height: " << height << "\n";
-        std::cout << "  layers: \n";
-        for (const auto & layer : layers) {
-            std::cout << " name: " << layer.name << " " << (layer.isGroupLayer ? "[G]" : "") << "\n";
+//        std::cout << "Animation: frames:" << framesCount << " width: " << width << " height: " << height << "\n";
+//        std::cout << "  layers: \n";
+//        for (const auto & layer : layers) {
+//            std::cout << " name: " << layer.name << " " << (layer.isGroupLayer ? "[G]" : "") << "\n";
+//        }
+    }
+    bool hasSlice(const std::string & sliceName) {
+        return sliceLookup.count(sliceName) > 0;
+    }
+
+    const Slice & getSlice(const std::string & sliceName) const {
+        const auto & it = sliceLookup.find(sliceName);
+        if(it == sliceLookup.end()){
+            assert(slices.size() > 0);
+            return slices[0];
+        } else {
+            return slices[it->second];
         }
     }
+
+    AnimationView toView() const {
+        return AnimationView(*this);
+    }
+
     static animation::Animation loadAseImage(const std::string &path);
 };
 
